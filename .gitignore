@@ -13,3 +13,4 @@ data/*.log
 .DS_Store
 Thumbs.db
 .vscode/
+DEV_NOTES.md

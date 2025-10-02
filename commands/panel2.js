@@ -1,66 +1,105 @@
+// commands/panel2.js
 import {
-  SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder,
-  ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder
+  SlashCommandBuilder,
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  StringSelectMenuBuilder,
+  PermissionFlagsBits,
 } from 'discord.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PANEL_PATH = path.join(__dirname, '..', 'data', 'panel2.json');
-const CFG_PATH   = path.join(__dirname, '..', 'data', 'config.json');
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const PANEL_FILE = path.join(DATA_DIR, 'panel2.json');
+const CFG_FILE = path.join(DATA_DIR, 'config.json');
 
-const readPanel = () => JSON.parse(fs.readFileSync(PANEL_PATH, 'utf8'));
-const readCfg   = () => JSON.parse(fs.readFileSync(CFG_PATH, 'utf8'));
+const readJSON = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 
-export const data = new SlashCommandBuilder()
-  .setName('panel2')
-  .setDescription('Ticket panel #2 controls')
-  .addSubcommand(sc => sc.setName('post').setDescription('Post Panel #2 in this channel'));
+function parseEmoji(input) {
+  if (!input) return undefined;
+  const s = String(input).trim();
+  const m = s.match(/^<(?:(a)?):(\w+):(\d+)>$/);
+  if (m) return { animated: !!m[1], name: m[2], id: m[3] };
+  return s;
+}
 
-export async function execute(interaction) {
-  const member = interaction.member;
-  const cfg = readCfg();
-  const allowed = cfg.allowedRoleIds || [];
-  const canPost = member.permissions?.has(PermissionFlagsBits.ManageChannels) ||
-    (allowed.length && allowed.some(rid => member.roles?.cache?.has(rid)));
-  if (!canPost) return interaction.reply({ content: '❌ You need Manage Channels or a staff role.', ephemeral: true });
-
-  const p = readPanel();
-  const embed = new EmbedBuilder()
-    .setTitle(p.title || 'Support')
-    .setDescription(p.body || 'Use the control below to open a ticket.')
-    .setColor(0xffa500);
-
+function buildPanelComponents(panel, which = 2) {
   const rows = [];
-
-  if (p.mode === 'dropdown') {
+  if (panel.mode === 'dropdown') {
     const menu = new StringSelectMenuBuilder()
-      .setCustomId('panel2_reason')
+      .setCustomId(`panel${which}_reason`)
       .setPlaceholder('Select the Contact Reason')
       .addOptions(
-        (p.options || []).slice(0, 25).map((o, idx) => ({
-          label: o.label || 'Reason',
+        (panel.options || []).slice(0, 25).map((o, idx) => ({
+          label: o.label?.slice(0, 100) || 'Reason',
           value: `opt_${idx}`,
           description: o.description?.slice(0, 100) || undefined,
-          emoji: o.emoji || undefined
+          emoji: parseEmoji(o.emoji),
         }))
       );
     rows.push(new ActionRowBuilder().addComponents(menu));
-    if (p.branding?.label && p.branding?.url) {
-      rows.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(p.branding.label).setURL(p.branding.url)
-      ));
+
+    if (panel.branding?.label && panel.branding?.url) {
+      rows.push(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setLabel(panel.branding.label)
+            .setURL(panel.branding.url)
+        )
+      );
     }
   } else {
-    const createBtn = new ButtonBuilder().setCustomId('panel2_create').setStyle(ButtonStyle.Primary).setLabel(p.buttonLabel || 'Create ticket');
+    const createBtn = new ButtonBuilder()
+      .setCustomId(`panel${which}_create`)
+      .setStyle(ButtonStyle.Primary)
+      .setLabel(panel.buttonLabel || 'Create ticket');
+
     const comps = [createBtn];
-    if (p.branding?.label && p.branding?.url) {
-      comps.push(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(p.branding.label).setURL(p.branding.url));
+    if (panel.branding?.label && panel.branding?.url) {
+      comps.push(
+        new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel(panel.branding.label).setURL(panel.branding.url)
+      );
     }
     rows.push(new ActionRowBuilder().addComponents(comps));
   }
+  return rows;
+}
 
-  await interaction.reply({ content: '✅ Panel #2 posted.', ephemeral: true });
+export const data = new SlashCommandBuilder()
+  .setName('panel2')
+  .setDescription('Manage or post Ticket Panel #2')
+  .addSubcommand((sc) => sc.setName('post').setDescription('Post Panel #2 in this channel'));
+
+export async function execute(interaction /*, client */) {
+  if (interaction.options.getSubcommand() !== 'post') return;
+
+  const cfg = readJSON(CFG_FILE);
+  const allowed = new Set(cfg.allowedRoleIds || []);
+  const member = interaction.member;
+
+  const isStaff =
+    member.permissions?.has(PermissionFlagsBits.ManageChannels) ||
+    [...allowed].some((rid) => member.roles?.cache?.has(rid));
+  if (!isStaff) {
+    return interaction.reply({ content: '❌ You need Manage Channels or a staff role.', ephemeral: true });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  const panel = readJSON(PANEL_FILE);
+  const embed = new EmbedBuilder()
+    .setTitle(panel.title || 'Support')
+    .setDescription(panel.body || 'Use the control below to open a ticket.')
+    .setColor(0xffa500);
+
+  const rows = buildPanelComponents(panel, 2);
+
   await interaction.channel.send({ embeds: [embed], components: rows });
+
+  return interaction.editReply('✅ Panel #2 posted.');
 }
