@@ -1,0 +1,31 @@
+{
+  "mode": "dropdown",
+  "title": "Organizer Support",
+  "body": "Have an inquiry? Use the menu or the button below to open a ticket. A private channel will be created and our team will assist you.",
+  "buttonLabel": "Create ticket",
+  "branding": {
+    "label": "",
+    "url": ""
+  },
+  "buttonForm": [],
+  "options": [
+    {
+      "label": "General Inquiry",
+      "description": "Choose this for general questions",
+      "emoji": "💬",
+      "form": []
+    },
+    {
+      "label": "Help — Tournaments",
+      "description": "Assistance with tournament setup",
+      "emoji": "🏆",
+      "form": []
+    },
+    {
+      "label": "Match Admin",
+      "description": "Issues managing your matches",
+      "emoji": "⚙️",
+      "form": []
+    }
+  ]
+}

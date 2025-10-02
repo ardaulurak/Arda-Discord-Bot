@@ -1,0 +1,19 @@
+{
+  "mode": "button",
+  "title": "Organizer Support",
+  "body": "Have an inquiry? Use the control below to open a ticket. A private channel will be created and our team will assist you.",
+  "buttonLabel": "Create ticket",
+  "branding": {
+    "label": "",
+    "url": ""
+  },
+  "buttonForm": [],
+  "options": [
+    {
+      "label": "General Inquiry",
+      "description": "Choose this for general questions",
+      "emoji": "💬",
+      "form": []
+    }
+  ]
+}

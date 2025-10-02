@@ -1,0 +1,14 @@
+<section class="grid gap-4">
+  <h1 class="text-2xl font-semibold">Admin Login</h1>
+  <form method="POST" action="/login" class="bg-slate-900 border border-slate-800 rounded-xl p-4 grid gap-3">
+    <label class="grid gap-1">
+      <span>Password</span>
+      <input type="password" name="password" required class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
+    </label>
+    <button class="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500">Sign in</button>
+  </form>
+  <% if (error) { %>
+    <div class="text-red-300"><%= error %></div>
+  <% } %>
+  <p class="text-slate-400 text-sm">Use the password set in <code>ADMIN_PASSWORD</code>.</p>
+</section>
