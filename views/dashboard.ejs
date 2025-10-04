@@ -1,16 +1,15 @@
-<!-- views/dashboard.ejs — FULL FILE -->
 <section class="grid gap-6">
   <h1 class="text-2xl font-semibold mb-2">Dashboard</h1>
 
-  <!-- Big buttons (as in your sketch) -->
-  <div class="grid md:grid-cols-2 gap-4">
+  <!-- Top two big sections (as in your sketch) -->
+  <div class="grid md:grid-cols-1 gap-4">
     <a href="#support-ticket" class="block rounded-xl border border-slate-800 bg-slate-900 p-8 hover:border-indigo-500 hover:bg-slate-800 transition">
       <h2 class="text-xl font-semibold mb-2">Support Ticket System</h2>
-      <p class="text-slate-400">Manage ticket settings and the public panel message.</p>
+      <p class="text-slate-400">Open to edit ticket settings and panels.</p>
     </a>
     <a href="#kick-alert" class="block rounded-xl border border-slate-800 bg-slate-900 p-8 hover:border-emerald-500 hover:bg-slate-800 transition">
       <h2 class="text-xl font-semibold mb-2">Kick Activity Alert</h2>
-      <p class="text-slate-400">Add Kick streamers, set the DM message, choose allowed voice channels.</p>
+      <p class="text-slate-400">Open to add Kick streamers and configure the alert.</p>
     </a>
   </div>
 
@@ -25,7 +24,7 @@
       </ul>
     </div>
 
-    <!-- Ticket settings (category + staff roles) -->
+    <!-- Ticket settings -->
     <div id="support-ticket" class="bg-slate-900 border border-slate-800 rounded-xl p-4">
       <h2 class="font-semibold mb-3">Ticket Settings</h2>
       <form method="POST" action="/dashboard/save-config" class="grid gap-3">
@@ -55,7 +54,6 @@
 
         <button class="px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 w-fit">Save</button>
       </form>
-      <p class="text-xs text-slate-400 mt-2">Tip: Members with Manage Channels also count as staff automatically.</p>
     </div>
   </div>
 
@@ -80,13 +78,13 @@
         <label class="grid gap-1">
           <span>Allowed Voice Channel IDs (comma-separated)</span>
           <input name="voice_allowed_ids" value="<%= (cfg.kick?.allowedVoiceIds || []).join(',') %>" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
-          <span class="text-xs text-slate-400">Boş bırakılırsa “herhangi bir ses kanalı” kabul edilir.</span>
+          <span class="text-xs text-slate-400">Leave blank = any voice channel is OK.</span>
         </label>
 
         <label class="grid gap-1">
           <span>Global DM Message</span>
           <textarea name="kick_message" rows="4" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"><%= cfg.kick?.message || '' %></textarea>
-          <span class="text-xs text-slate-400">Değişkenler: {user} {login} {url} {title} {game}</span>
+          <span class="text-xs text-slate-400">Vars: {user} {login} {url} {title} {game}</span>
         </label>
       </div>
 
@@ -122,34 +120,32 @@
 </section>
 
 <script>
-  // staff role chips
+  // role chips
   const roleChips = document.getElementById('roleChips');
   const rolesInput = document.getElementById('rolesInput');
-  if (roleChips) {
-    roleChips.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-role]');
-      if (!btn) return;
-      btn.classList.toggle('bg-emerald-600');
-      btn.classList.toggle('border-emerald-500');
-      btn.classList.toggle('bg-slate-800');
-      btn.classList.toggle('border-slate-700');
-      const id = btn.getAttribute('data-role');
-      const set = new Set((rolesInput.value ? rolesInput.value.split(',') : []).filter(Boolean));
-      if (set.has(id)) set.delete(id); else set.add(id);
-      rolesInput.value = Array.from(set).join(',');
-    });
-  }
+  roleChips?.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-role]');
+    if (!btn) return;
+    btn.classList.toggle('bg-emerald-600');
+    btn.classList.toggle('border-emerald-500');
+    btn.classList.toggle('bg-slate-800');
+    btn.classList.toggle('border-slate-700');
+    const id = btn.getAttribute('data-role');
+    const set = new Set((rolesInput.value?rolesInput.value.split(','):[]).filter(Boolean));
+    set.has(id) ? set.delete(id) : set.add(id);
+    rolesInput.value = Array.from(set).join(',');
+  });
 
-  // Kick streamers dynamic rows
-  const kickList = document.getElementById('kickList');
-  const kickAdd = document.getElementById('kickAdd');
+  // Kick dynamic rows
+  const kickList  = document.getElementById('kickList');
+  const kickAdd   = document.getElementById('kickAdd');
   const kickCount = document.getElementById('kickCount');
 
-  function addKickRow() {
+  function addRow(){
     const i = kickList.querySelectorAll('.grid.md\\:grid-cols-5').length;
-    const div = document.createElement('div');
-    div.className = 'grid md:grid-cols-5 gap-2 items-center border border-slate-800 rounded p-2';
-    div.innerHTML = `
+    const row = document.createElement('div');
+    row.className = 'grid md:grid-cols-5 gap-2 items-center border border-slate-800 rounded p-2';
+    row.innerHTML = `
       <input name="kick_${i}_login" placeholder="Kick username" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
       <input name="kick_${i}_uid" placeholder="Discord User ID" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
       <select name="kick_${i}_chan" class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
@@ -158,27 +154,22 @@
           <option value="<%= t.id %>"><%= t.name %></option>
         <% }) %>
       </select>
-      <label class="inline-flex items-center gap-2">
-        <input type="checkbox" name="kick_${i}_enabled" checked />
-        <span>Enabled</span>
-      </label>
+      <label class="inline-flex items-center gap-2"><input type="checkbox" name="kick_${i}_enabled" checked/> <span>Enabled</span></label>
       <button type="button" class="kickRemove px-3 py-1 rounded bg-red-600 hover:bg-red-500">Remove</button>
     `;
-    kickList.appendChild(div);
+    kickList.appendChild(row);
     kickCount.value = kickList.querySelectorAll('.grid.md\\:grid-cols-5').length;
   }
+  kickAdd?.addEventListener('click', addRow);
 
-  kickAdd?.addEventListener('click', addKickRow);
-
-  kickList?.addEventListener('click', (e) => {
+  kickList?.addEventListener('click', (e)=>{
     const btn = e.target.closest('.kickRemove');
     if (!btn) return;
     const box = btn.closest('.grid.md\\:grid-cols-5');
     box.remove();
-    // re-index
     const rows = kickList.querySelectorAll('.grid.md\\:grid-cols-5');
-    rows.forEach((row, idx) => {
-      row.querySelectorAll('input,select').forEach(el => {
+    rows.forEach((r,idx)=>{
+      r.querySelectorAll('input,select').forEach(el=>{
         el.name = el.name.replace(/kick_\d+_/g, `kick_${idx}_`);
       });
     });

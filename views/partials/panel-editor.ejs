@@ -1,5 +1,4 @@
-<!-- views/partials/panel-editor.ejs -->
-<form id="panelForm<%= which %>" method="POST" action="/dashboard/save-panel" class="grid gap-4">
+<form method="POST" action="/dashboard/save-panel" class="grid gap-4">
   <input type="hidden" name="which" value="<%= which %>">
 
   <div class="flex items-center gap-6">
@@ -41,14 +40,12 @@
 
   <div class="grid gap-2">
     <h3 class="font-medium">Create Button — Questions (max 5)</h3>
-    <div class="text-xs text-slate-400">Leave empty to have no popup. JSON is saved automatically.</div>
     <textarea name="buttonFormJson" rows="4" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"><%= JSON.stringify(panel.buttonForm || [], null, 2) %></textarea>
   </div>
 
   <div class="grid gap-2">
     <h3 class="font-medium">Dropdown Options (used only if mode = dropdown)</h3>
     <textarea name="optionsJson" rows="6" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"><%= JSON.stringify(panel.options || [], null, 2) %></textarea>
-    <div class="text-xs text-slate-400">You can paste/export the structured options you already have.</div>
   </div>
 
   <button class="mt-2 px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500 w-fit">Save Panel</button>
