@@ -1,257 +1,213 @@
-// index.js
+// index.js  — FULL FILE
 import 'dotenv/config';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-
 import express from 'express';
 import session from 'express-session';
-import {
-  Client,
-  GatewayIntentBits,
-  Collection,
-  Partials,
-} from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials, PermissionFlagsBits } from 'discord.js';
+import { startKickWatcher } from './watchers/kick.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/* ----------------- tiny config store (JSON file) ----------------- */
+/* ----------------- tiny JSON stores ----------------- */
 const DATA_DIR = path.join(__dirname, 'data');
-const CFG_PATH = path.join(DATA_DIR, 'config.json');
+const CFG_PATH = path.join(DATA_DIR, 'config.json');          // { supportCategoryId, allowedRoleIds, kick:{message, allowedVoiceIds} }
+const PANEL1_PATH = path.join(DATA_DIR, 'panel1.json');       // { ... }
+const PANEL2_PATH = path.join(DATA_DIR, 'panel2.json');       // { ... }
+const STREAMERS_PATH = path.join(DATA_DIR, 'streamers.json'); // [ { platform:'kick', login, discordUserId, announceChannelId?, enabled } ]
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(CFG_PATH))
-  fs.writeFileSync(
-    CFG_PATH,
-    JSON.stringify({ supportCategoryId: '', supportRoleId: '', allowedRoleIds: [] }, null, 2)
-  );
+const writeJson = (p, v) => fs.writeFileSync(p, JSON.stringify(v, null, 2));
+const readJson = (p, fallback) => { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fallback; } };
 
-const readCfg = () => JSON.parse(fs.readFileSync(CFG_PATH, 'utf8'));
-const writeCfg = (obj) => fs.writeFileSync(CFG_PATH, JSON.stringify(obj, null, 2));
+// ensure defaults
+if (!fs.existsSync(CFG_PATH)) writeJson(CFG_PATH, { supportCategoryId: '', allowedRoleIds: [], kick: { message: '', allowedVoiceIds: [] } });
+if (!fs.existsSync(PANEL1_PATH)) writeJson(PANEL1_PATH, { mode: 'button', title: 'Organizer Support', body: 'Have an inquiry?', buttonLabel: 'Create ticket', options: [], branding: null, buttonForm: [] });
+if (!fs.existsSync(PANEL2_PATH)) writeJson(PANEL2_PATH, { mode: 'button', title: 'Organizer Support', body: 'Have an inquiry?', buttonLabel: 'Create ticket', options: [], branding: null, buttonForm: [] });
+if (!fs.existsSync(STREAMERS_PATH)) writeJson(STREAMERS_PATH, []);
 
-/* ----------------- Express app & views --------------------------- */
+/* ----------------- Express app ---------------------- */
 const app = express();
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.engine('ejs', (await import('ejs')).default.__express);
-
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* ----------------- Sessions (password auth) ---------------------- */
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'replace_me',
-    resave: false,
-    saveUninitialized: false,
-    cookie: { sameSite: 'lax' },
-  })
-);
+/* ----------------- Sessions ------------------------- */
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'replace_me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { sameSite: 'lax' }
+}));
+const requireAuth = (req, res, next) => { if (req.session?.authed) return next(); res.redirect('/login'); };
 
-const requireAuth = (req, res, next) => {
-  if (req.session?.authed) return next();
-  res.redirect('/login');
-};
-
-/* ----------------- Minimal site & health ------------------------- */
+/* ----------------- Minimal pages -------------------- */
 app.get('/', (_req, res) => {
-  res.send(
-    '✅ Discord Ticket Bot + Dashboard is running. Visit <a href="/dashboard">/dashboard</a>.'
-  );
+  res.send('✅ Bot up. <a href="/dashboard">Dashboard</a>');
 });
 app.get('/health', (_req, res) => res.status(200).send('OK'));
 
-/* ----------------- Auth routes ---------------------------------- */
+/* ----------------- Auth ------------------------------ */
 app.get('/login', (req, res) => {
   if (req.session?.authed) return res.redirect('/dashboard');
-  res.render('login', { layout: 'layout', error: null, title: 'Login' });
+  res.render('login', { error: null, title: 'Login' });
 });
-
 app.post('/login', (req, res) => {
   const pass = req.body?.password || '';
   if (pass && process.env.ADMIN_PASSWORD && pass === process.env.ADMIN_PASSWORD) {
     req.session.authed = true;
     return res.redirect('/dashboard');
   }
-  return res
-    .status(401)
-    .render('login', { layout: 'layout', error: 'Wrong password.', title: 'Login' });
+  res.status(401).render('login', { error: 'Wrong password.', title: 'Login' });
 });
+app.get('/logout', (req, res) => { req.session.destroy(() => res.redirect('/login')); });
 
-app.get('/logout', (req, res) => {
-  req.session.destroy(() => res.redirect('/login'));
+/* ----------------- Discord client ------------------- */
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers, GatewayIntentBits.GuildVoiceStates],
+  partials: [Partials.Channel]
 });
+client.commands = new Collection();
 
-/* ----------------- Dashboard (reads JSON panel files) ------------ */
-const panelPath = (n) => path.join(__dirname, 'data', `panel${n}.json`);
-const ensurePanel = (n) => {
-  const p = panelPath(n);
-  if (!fs.existsSync(p)) {
-    fs.writeFileSync(
-      p,
-      JSON.stringify(
-        {
-          mode: 'button',
-          title: 'Organizer Support',
-          body:
-            'Have an inquiry? Use the control below to open a ticket. A private channel will be created and our team will assist you.',
-          buttonLabel: 'Create ticket',
-          branding: { label: '', url: '' },
-          buttonForm: [],
-          options: [],
-        },
-        null,
-        2
-      )
-    );
+/* dynamic command loader (unchanged) */
+const commandsPath = path.join(__dirname, 'commands');
+if (fs.existsSync(commandsPath)) {
+  const files = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+  for (const file of files) {
+    const full = path.join(commandsPath, file);
+    const mod = await import(pathToFileURL(full).href);
+    if (mod?.data?.name) client.commands.set(mod.data.name, mod);
   }
-};
-ensurePanel(1);
-ensurePanel(2);
+}
+client.on('ready', () => console.log(`Logged in as ${client.user.tag}`));
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  const command = client.commands.get(interaction.commandName);
+  if (!command) return;
+  try {
+    await command.execute(interaction, client);
+  } catch (err) {
+    console.error(err);
+    const msg = '⚠️ Something went wrong.';
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ content: msg, flags: 64 }).catch(() => {});
+    } else {
+      await interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
+    }
+  }
+});
 
-const loadPanel = (n) => JSON.parse(fs.readFileSync(panelPath(n), 'utf8'));
-const savePanel = (n, data) => fs.writeFileSync(panelPath(n), JSON.stringify(data, null, 2));
+/* ----------------- Dashboard data helpers ----------- */
+async function fetchGuildData() {
+  try {
+    const guild = await client.guilds.fetch(process.env.GUILD_ID);
+    await guild.channels.fetch();
+    const roles = (await guild.roles.fetch()).map(r => ({ id: r.id, name: r.name, color: r.color }));
+    const cats = guild.channels.cache.filter(c => c.type === 4).map(c => ({ id: c.id, name: c.name })); // 4 = GUILD_CATEGORY
+    const voices = guild.channels.cache.filter(c => c.type === 2).map(c => ({ id: c.id, name: c.name })); // 2 = GUILD_VOICE
+    const text = guild.channels.cache.filter(c => c.type === 0).map(c => ({ id: c.id, name: `#${c.name}` })); // 0 = GUILD_TEXT
+    return { roles, categories: cats, voices, text };
+  } catch {
+    return { roles: [], categories: [], voices: [], text: [] };
+  }
+}
 
-app.get('/dashboard', requireAuth, (_req, res) => {
-  const which = _req.query.panel === '2' ? '2' : '1';
-  const cfg = readCfg();
+/* ----------------- Dashboard ------------------------ */
+app.get('/dashboard', requireAuth, async (_req, res) => {
+  const cfg = readJson(CFG_PATH, { supportCategoryId: '', allowedRoleIds: [], kick: { message: '', allowedVoiceIds: [] } });
+  const panel1 = readJson(PANEL1_PATH, {});
+  const panel2 = readJson(PANEL2_PATH, {});
+  const streamers = readJson(STREAMERS_PATH, []);
+  const guildData = await fetchGuildData();
 
-  // Gather guild roles/categories for nicer UI (optional; safe fallback)
   res.render('dashboard', {
-    layout: 'layout',
     title: 'Dashboard',
-    loggedIn: true,
     ready: client?.isReady?.() || false,
     botTag: client?.user?.tag || null,
     guildId: process.env.GUILD_ID || 'n/a',
-    appName: 'Ticket Bot',
-    which,
     cfg,
-    env: {
-      SUPPORT_CATEGORY_ID: process.env.SUPPORT_CATEGORY_ID,
-      SUPPORT_ROLE_ID: process.env.SUPPORT_ROLE_ID,
-    },
-    panel: loadPanel(which),
-    guildData: { roles: [], categories: [] }, // filled by client if you wired it; safe empty fallback
+    panel1,
+    panel2,
+    streamers,
+    guildData
   });
 });
 
-app.post('/dashboard/save', requireAuth, (req, res) => {
-  const current = readCfg();
+/* ---- Ticket config save ---- */
+app.post('/dashboard/save-config', requireAuth, (req, res) => {
+  const cfg = readJson(CFG_PATH, {});
   const next = {
     supportCategoryId: (req.body.supportCategoryId || '').trim(),
-    allowedRoleIds: (req.body.allowedRoleIds || '')
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    allowedRoleIds: String(req.body.allowedRoleIds || '').split(',').map(s => s.trim()).filter(Boolean),
+    kick: cfg.kick || { message: '', allowedVoiceIds: [] }
   };
-  writeCfg({ ...current, ...next });
-  res.redirect(`/dashboard?panel=${req.body.which || '1'}`);
+  writeJson(CFG_PATH, { ...cfg, ...next });
+  res.redirect('/dashboard');
 });
 
+/* ---- Panel save (Panel 1 or 2) ---- */
 app.post('/dashboard/save-panel', requireAuth, (req, res) => {
-  const which = req.body.which === '2' ? 2 : 1;
+  const which = String(req.body.which || '1') === '2' ? 2 : 1;
+  const target = which === 2 ? PANEL2_PATH : PANEL1_PATH;
 
-  const panel = loadPanel(which);
-  const next = {
+  function tryParse(json, fallback) {
+    try { return JSON.parse(json); } catch { return fallback; }
+  }
+
+  const panel = {
     mode: req.body.mode === 'dropdown' ? 'dropdown' : 'button',
     title: (req.body.title || '').trim(),
     body: (req.body.body || '').trim(),
     buttonLabel: (req.body.buttonLabel || 'Create ticket').trim(),
-    branding: {
-      label: (req.body.brand_label || '').trim(),
-      url: (req.body.brand_url || '').trim(),
-    },
-    buttonForm: [],
-    options: [],
+    branding: (req.body.brand_label || req.body.brand_url) ? { label: req.body.brand_label || '', url: req.body.brand_url || '' } : null,
+    buttonForm: tryParse(req.body.buttonFormJson || '[]', []),
+    options: tryParse(req.body.optionsJson || '[]', [])
   };
 
-  // Button form (JSON string from hidden input)
-  try {
-    if (req.body.buttonFormJson) {
-      const parsed = JSON.parse(req.body.buttonFormJson);
-      if (Array.isArray(parsed)) next.buttonForm = parsed.slice(0, 5);
-    }
-  } catch {
-    // ignore bad JSON
-  }
-
-  // Options (JSON string from hidden input)
-  try {
-    if (req.body.optionsJson) {
-      const parsed = JSON.parse(req.body.optionsJson);
-      if (Array.isArray(parsed)) next.options = parsed.slice(0, 6);
-    }
-  } catch {
-    // ignore
-  }
-
-  savePanel(which, next);
-  res.redirect(`/dashboard?panel=${which}`);
+  writeJson(target, panel);
+  res.redirect('/dashboard');
 });
 
-/* ----------------- Start web server ------------------------------ */
+/* ---- Kick section save ---- */
+app.post('/dashboard/kick/save', requireAuth, (req, res) => {
+  const cfg = readJson(CFG_PATH, {});
+  const allowedVoiceIds = String(req.body.voice_allowed_ids || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  cfg.kick = {
+    message: (req.body.kick_message || '').trim(),
+    allowedVoiceIds
+  };
+  writeJson(CFG_PATH, cfg);
+
+  const count = Number(req.body.kick_count || 0);
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const login = (req.body[`kick_${i}_login`] || '').trim();
+    const discordUserId = (req.body[`kick_${i}_uid`] || '').trim();
+    const announceChannelId = (req.body[`kick_${i}_chan`] || '').trim();
+    const enabled = !!req.body[`kick_${i}_enabled`];
+
+    if (login && discordUserId) {
+      rows.push({ platform: 'kick', login, discordUserId, announceChannelId, enabled });
+    }
+  }
+  writeJson(STREAMERS_PATH, rows);
+
+  res.redirect('/dashboard');
+});
+
+/* ----------------- Start server & bot --------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Web up on :${PORT}`));
 
-/* ----------------- Discord client -------------------------------- */
-const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
-  partials: [Partials.Channel],
+client.login(process.env.DISCORD_TOKEN).then(() => {
+  // start watcher after login
+  startKickWatcher(client);
 });
-
-client.commands = new Collection();
-
-// Dynamic command loader
-const commandsPath = path.join(__dirname, 'commands');
-if (fs.existsSync(commandsPath)) {
-  const files = fs.readdirSync(commandsPath).filter((f) => f.endsWith('.js'));
-  for (const file of files) {
-    const full = path.join(commandsPath, file);
-    const mod = await import(pathToFileURL(full).href);
-    if (mod?.data?.name) {
-      client.commands.set(mod.data.name, mod);
-      console.log(`➕ Loaded command: /${mod.data.name} (${file})`);
-    } else {
-      console.log(`⚠️  Skipping "${file}" — not a slash command (no export "data").`);
-    }
-  }
-}
-
-client.once('ready', () => console.log(`Logged in as ${client.user.tag}`));
-
-/* --------- SAFE interaction handler (prevents 40060) ------------- */
-client.on('interactionCreate', async (interaction) => {
-  const isCmd = interaction.isChatInputCommand();
-  const isComp =
-    interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit();
-  if (!isCmd && !isComp) return;
-
-  try {
-    if (isCmd) {
-      const cmd = client.commands.get(interaction.commandName);
-      if (!cmd) return;
-      await cmd.execute(interaction, client); // each command must avoid double replying
-      return;
-    }
-
-    // If you have centralized component handling, call it here.
-
-  } catch (err) {
-    console.error(err);
-    const msg = '⚠️ Something went wrong.';
-    try {
-      if (interaction.deferred) {
-        await interaction.editReply({ content: msg });
-      } else if (interaction.replied) {
-        await interaction.followUp({ content: msg, ephemeral: true });
-      } else {
-        await interaction.reply({ content: msg, ephemeral: true });
-      }
-    } catch (e) {
-      console.error('secondary error while replying:', e.message);
-    }
-  }
-});
-
-client.login(process.env.DISCORD_TOKEN);

@@ -22,9 +22,9 @@ const readJSON = (p) => JSON.parse(fs.readFileSync(p, 'utf8'));
 function parseEmoji(input) {
   if (!input) return undefined;
   const s = String(input).trim();
-  const m = s.match(/^<(?:(a)?):(\w+):(\d+)>$/);
+  const m = s.match(/^<(?:(a)?):(\w+):(\d+)>$/); // <:name:id> or <a:name:id>
   if (m) return { animated: !!m[1], name: m[2], id: m[3] };
-  return s;
+  return s; // unicode emoji
 }
 
 function buildPanelComponents(panel, which = 2) {
@@ -72,34 +72,52 @@ function buildPanelComponents(panel, which = 2) {
 
 export const data = new SlashCommandBuilder()
   .setName('panel2')
-  .setDescription('Manage or post Ticket Panel #2')
+  .setDescription('Post Ticket Panel #2')
   .addSubcommand((sc) => sc.setName('post').setDescription('Post Panel #2 in this channel'));
 
 export async function execute(interaction /*, client */) {
   if (interaction.options.getSubcommand() !== 'post') return;
 
-  const cfg = readJSON(CFG_FILE);
-  const allowed = new Set(cfg.allowedRoleIds || []);
-  const member = interaction.member;
-
-  const isStaff =
-    member.permissions?.has(PermissionFlagsBits.ManageChannels) ||
-    [...allowed].some((rid) => member.roles?.cache?.has(rid));
-  if (!isStaff) {
-    return interaction.reply({ content: '❌ You need Manage Channels or a staff role.', ephemeral: true });
-  }
-
+  // ✅ ACKNOWLEDGE IMMEDIATELY
   await interaction.deferReply({ ephemeral: true });
 
-  const panel = readJSON(PANEL_FILE);
-  const embed = new EmbedBuilder()
-    .setTitle(panel.title || 'Support')
-    .setDescription(panel.body || 'Use the control below to open a ticket.')
-    .setColor(0xffa500);
+  try {
+    // Permission check: Manage Channels or staff role in config
+    const cfg = readJSON(CFG_FILE);
+    const allowed = new Set(cfg.allowedRoleIds || []);
+    const member = interaction.member;
+    const isStaff =
+      member.permissions?.has(PermissionFlagsBits.ManageChannels) ||
+      [...allowed].some((rid) => member.roles?.cache?.has(rid));
 
-  const rows = buildPanelComponents(panel, 2);
+    if (!isStaff) {
+      return interaction.editReply('❌ You need Manage Channels or a staff role to post the panel.');
+    }
 
-  await interaction.channel.send({ embeds: [embed], components: rows });
+    // Load panel json (guard for missing file)
+    if (!fs.existsSync(PANEL_FILE)) {
+      return interaction.editReply('⚠️ panel2.json is missing. Save it once on the dashboard and try again.');
+    }
+    const panel = readJSON(PANEL_FILE);
 
-  return interaction.editReply('✅ Panel #2 posted.');
+    const embed = new EmbedBuilder()
+      .setTitle(panel.title || 'Organizer Support')
+      .setDescription(
+        panel.body ||
+          'Have an inquiry? Use the control below to open a ticket. A private channel will be created and our team will assist you.'
+      )
+      .setColor(0xffa500);
+
+    const rows = buildPanelComponents(panel, 2);
+    if (rows.length === 0) {
+      return interaction.editReply('⚠️ Panel has no controls. Switch mode or add options/questions on the dashboard.');
+    }
+
+    await interaction.channel.send({ embeds: [embed], components: rows });
+    return interaction.editReply('✅ Panel #2 posted.');
+  } catch (err) {
+    console.error('panel2 error:', err);
+    // Always finish the deferred reply
+    return interaction.editReply('⚠️ Something went wrong while posting Panel #2 (see bot logs).');
+  }
 }

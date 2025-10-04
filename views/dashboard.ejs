@@ -1,11 +1,17 @@
+<!-- views/dashboard.ejs — FULL FILE -->
 <section class="grid gap-6">
   <h1 class="text-2xl font-semibold mb-2">Dashboard</h1>
 
-  <!-- Panel tabs -->
-  <div class="flex gap-2">
-    <% const isPanel1 = (which === '1'); const isPanel2 = !isPanel1; %>
-    <a href="/dashboard?panel=1" class="px-3 py-1 rounded <%= isPanel1 ? 'bg-indigo-600' : 'bg-slate-800' %> border border-slate-700">Panel 1</a>
-    <a href="/dashboard?panel=2" class="px-3 py-1 rounded <%= isPanel2 ? 'bg-indigo-600' : 'bg-slate-800' %> border border-slate-700">Panel 2</a>
+  <!-- Big buttons (as in your sketch) -->
+  <div class="grid md:grid-cols-2 gap-4">
+    <a href="#support-ticket" class="block rounded-xl border border-slate-800 bg-slate-900 p-8 hover:border-indigo-500 hover:bg-slate-800 transition">
+      <h2 class="text-xl font-semibold mb-2">Support Ticket System</h2>
+      <p class="text-slate-400">Manage ticket settings and the public panel message.</p>
+    </a>
+    <a href="#kick-alert" class="block rounded-xl border border-slate-800 bg-slate-900 p-8 hover:border-emerald-500 hover:bg-slate-800 transition">
+      <h2 class="text-xl font-semibold mb-2">Kick Activity Alert</h2>
+      <p class="text-slate-400">Add Kick streamers, set the DM message, choose allowed voice channels.</p>
+    </a>
   </div>
 
   <div class="grid md:grid-cols-2 gap-6">
@@ -19,21 +25,16 @@
       </ul>
     </div>
 
-    <!-- Ticket settings -->
-    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+    <!-- Ticket settings (category + staff roles) -->
+    <div id="support-ticket" class="bg-slate-900 border border-slate-800 rounded-xl p-4">
       <h2 class="font-semibold mb-3">Ticket Settings</h2>
-      <form id="cfgForm" method="POST" action="/dashboard/save-config" class="grid gap-3">
-        <input type="hidden" name="which" value="<%= which %>">
+      <form method="POST" action="/dashboard/save-config" class="grid gap-3">
         <label class="grid gap-1">
           <span>Support Category</span>
           <select name="supportCategoryId" class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
             <option value="">-- Select a category --</option>
             <% (guildData.categories || []).forEach(c => { %>
-              <% if (String(cfg.supportCategoryId) === String(c.id)) { %>
-                <option value="<%= c.id %>" selected><%= c.name %></option>
-              <% } else { %>
-                <option value="<%= c.id %>"><%= c.name %></option>
-              <% } %>
+              <option value="<%= c.id %>" <%= String(cfg.supportCategoryId)===String(c.id) ? 'selected' : '' %>><%= c.name %></option>
             <% }) %>
           </select>
         </label>
@@ -42,15 +43,9 @@
           <span>Staff Roles (can claim/close)</span>
           <div id="roleChips" class="flex flex-wrap gap-2">
             <% const selected = new Set(cfg.allowedRoleIds || []); %>
-            <% (guildData.roles || []).forEach(r => { 
-                 const isSel = selected.has(r.id);
-                 const chipClass = isSel
-                  ? 'px-3 py-1 rounded-full border bg-emerald-600 border-emerald-500'
-                  : 'px-3 py-1 rounded-full border bg-slate-800 border-slate-700';
-                 const hex = (r.color || 0).toString(16).padStart(6,'0');
-            %>
-              <button type="button" data-role="<%= r.id %>" class="<%= chipClass %>">
-                <span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color:#<%= hex %>"></span>
+            <% (guildData.roles || []).forEach(r => { %>
+              <button type="button" data-role="<%= r.id %>" class="px-3 py-1 rounded-full border <%= selected.has(r.id) ? 'bg-emerald-600 border-emerald-500' : 'bg-slate-800 border-slate-700' %>">
+                <span class="inline-block w-3 h-3 rounded-full mr-2" style="background-color:#<%= (r.color || 0).toString(16).padStart(6,'0') %>"></span>
                 <%= r.name %>
               </button>
             <% }) %>
@@ -64,87 +59,70 @@
     </div>
   </div>
 
-  <!-- Panel editor -->
+  <!-- Panel 1 -->
   <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
-    <h2 class="font-semibold mb-3">Panel <%= which %> — Ticket Panel</h2>
-    <form id="panelForm" method="POST" action="/dashboard/save-panel" class="grid gap-4">
-      <input type="hidden" name="which" value="<%= which %>">
+    <h2 class="font-semibold mb-3">Panel 1 — Ticket Panel</h2>
+    <%- include('partials/panel-editor', { which: 1, panel: panel1 }) %>
+  </div>
 
-      <!-- Mode -->
-      <div class="flex items-center gap-6">
-        <% const useButton = (panel.mode !== 'dropdown'); const useDropdown = !useButton; %>
-        <label class="inline-flex items-center gap-2">
-          <input type="radio" name="mode" value="button" <%= useButton ? 'checked' : '' %> />
-          <span>Use <b>Create Button</b></span>
-        </label>
-        <label class="inline-flex items-center gap-2">
-          <input type="radio" name="mode" value="dropdown" <%= useDropdown ? 'checked' : '' %> />
-          <span>Use <b>Dropdown Reasons</b></span>
-        </label>
-      </div>
+  <!-- Panel 2 -->
+  <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+    <h2 class="font-semibold mb-3">Panel 2 — Ticket Panel</h2>
+    <%- include('partials/panel-editor', { which: 2, panel: panel2 }) %>
+  </div>
 
-      <label class="grid gap-1">
-        <span>Title</span>
-        <input name="title" value="<%= panel.title || '' %>" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
-      </label>
+  <!-- Kick Activity Alert -->
+  <div id="kick-alert" class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+    <h2 class="font-semibold mb-3">Kick Activity Alert</h2>
 
-      <label class="grid gap-1">
-        <span>Body</span>
-        <textarea name="body" rows="4" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"><%= panel.body || '' %></textarea>
-      </label>
-
+    <form id="kickForm" method="POST" action="/dashboard/kick/save" class="grid gap-4">
       <div class="grid md:grid-cols-2 gap-3">
         <label class="grid gap-1">
-          <span>Create Button Label</span>
-          <input name="buttonLabel" value="<%= panel.buttonLabel || 'Create ticket' %>" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+          <span>Allowed Voice Channel IDs (comma-separated)</span>
+          <input name="voice_allowed_ids" value="<%= (cfg.kick?.allowedVoiceIds || []).join(',') %>" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+          <span class="text-xs text-slate-400">Boş bırakılırsa “herhangi bir ses kanalı” kabul edilir.</span>
         </label>
-        <% const brandLabel = (panel.branding && panel.branding.label) ? panel.branding.label : ''; 
-           const brandUrl   = (panel.branding && panel.branding.url) ? panel.branding.url : ''; %>
-        <div class="grid gap-1">
-          <span>Branding (shows as link button)</span>
-          <div class="grid md:grid-cols-2 gap-2">
-            <input name="brand_label" placeholder="Label (optional)" value="<%= brandLabel %>"
-                   class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
-            <input name="brand_url" placeholder="https://… (optional)" value="<%= brandUrl %>"
-                   class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+
+        <label class="grid gap-1">
+          <span>Global DM Message</span>
+          <textarea name="kick_message" rows="4" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"><%= cfg.kick?.message || '' %></textarea>
+          <span class="text-xs text-slate-400">Değişkenler: {user} {login} {url} {title} {game}</span>
+        </label>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <h3 class="font-medium">Streamers (Kick)</h3>
+        <button type="button" id="kickAdd" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500">Add row</button>
+      </div>
+
+      <input type="hidden" id="kickCount" name="kick_count" value="<%= (streamers||[]).length %>">
+      <div id="kickList" class="grid gap-2">
+        <% (streamers || []).forEach((s, i) => { %>
+          <div class="grid md:grid-cols-5 gap-2 items-center border border-slate-800 rounded p-2">
+            <input name="kick_<%= i %>_login" value="<%= s.login || '' %>" placeholder="Kick username" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+            <input name="kick_<%= i %>_uid" value="<%= s.discordUserId || '' %>" placeholder="Discord User ID" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+            <select name="kick_<%= i %>_chan" class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
+              <option value="">— fallback channel (optional) —</option>
+              <% (guildData.text || []).forEach(t => { %>
+                <option value="<%= t.id %>" <%= String(s.announceChannelId||'')===String(t.id)?'selected':'' %>><%= t.name %></option>
+              <% }) %>
+            </select>
+            <label class="inline-flex items-center gap-2">
+              <input type="checkbox" name="kick_<%= i %>_enabled" <%= s.enabled ? 'checked' : '' %> />
+              <span>Enabled</span>
+            </label>
+            <button type="button" class="kickRemove px-3 py-1 rounded bg-red-600 hover:bg-red-500">Remove</button>
           </div>
-        </div>
+        <% }) %>
       </div>
 
-      <!-- Button Modal Builder -->
-      <div class="grid gap-2">
-        <h3 class="font-medium">Create Button — Questions (max 5)</h3>
-        <div id="btnFields" class="grid gap-2"></div>
-        <div class="flex gap-2">
-          <button type="button" id="btnAdd" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500">Add field</button>
-          <span class="text-slate-400 text-sm">Leave empty to have no popup.</span>
-        </div>
-        <input type="hidden" name="buttonFormJson" id="buttonFormJson">
-      </div>
-
-      <!-- Dropdown Options Builder -->
-      <div class="grid gap-2">
-        <div class="flex items-center justify-between">
-          <h3 class="font-medium">Dropdown Options (max 6) — each with up to 5 questions</h3>
-          <button type="button" id="optAdd" class="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500">Add option</button>
-        </div>
-        <div id="optList" class="grid gap-3"></div>
-        <input type="hidden" name="optionsJson" id="optionsJson">
-      </div>
-
-      <button class="mt-2 px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-500 w-fit">Save Panel</button>
+      <button class="mt-2 px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 w-fit">Save Kick Settings</button>
     </form>
   </div>
 </section>
 
-<!-- Data from server (no EJS inside JS lines) -->
-<script id="panel-data" type="application/json">
-  <%- JSON.stringify(panel).replace(/</g, '\\u003c') %>
-</script>
 <script>
-  const initialPanel = JSON.parse(document.getElementById('panel-data').textContent);
-
-  /* --- Staff role chips --- */
+  // staff role chips
   const roleChips = document.getElementById('roleChips');
   const rolesInput = document.getElementById('rolesInput');
   if (roleChips) {
@@ -162,146 +140,48 @@
     });
   }
 
-  /* --- Helpers for builders --- */
-  const el = (tag, cls, html) => { const d = document.createElement(tag); if (cls) d.className = cls; if (html!==undefined) d.innerHTML = html; return d; };
-  const makeText = (name, val, ph) => `<input name="${name}" value="${val ?? ''}" placeholder="${ph||''}" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>`;
-  const makeCheck = (name, checked, label) => `<label class="inline-flex items-center gap-2"><input type="checkbox" name="${name}" ${checked?'checked':''}/> <span>${label}</span></label>`;
-  const makeSelect = (name, val) => `
-    <select name="${name}" class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
-      <option value="short" ${val==='short'?'selected':''}>Short</option>
-      <option value="paragraph" ${val==='paragraph'?'selected':''}>Paragraph</option>
-    </select>`;
+  // Kick streamers dynamic rows
+  const kickList = document.getElementById('kickList');
+  const kickAdd = document.getElementById('kickAdd');
+  const kickCount = document.getElementById('kickCount');
 
-  /* --- Button fields builder --- */
-  const btnWrap = document.getElementById('btnFields');
-  const btnAdd  = document.getElementById('btnAdd');
-  const btnHidden = document.getElementById('buttonFormJson');
-
-  function renderBtnFields(list){
-    btnWrap.innerHTML = '';
-    list.forEach((f,i)=>{
-      const row = el('div','grid md:grid-cols-5 gap-2 items-center');
-      row.innerHTML = `
-        ${makeText('id', f.id, 'id')} 
-        ${makeText('label', f.label, 'label')}
-        ${makeText('placeholder', f.placeholder, 'placeholder (optional)')}
-        ${makeSelect('style', f.style||'short')}
-        ${makeText('max', (f.max??''), 'max (optional)')}
-      `;
-      const tools = el('div','flex items-center gap-3 mt-1');
-      tools.innerHTML = `${makeCheck('required', f.required, 'Required')} <button type="button" class="rm px-2 py-1 rounded bg-red-600 hover:bg-red-500">Remove</button>`;
-      const box = el('div','border border-slate-800 rounded p-2 grid gap-2');
-      box.append(row,tools);
-      btnWrap.appendChild(box);
-      tools.querySelector('.rm').onclick = () => { list.splice(i,1); renderBtnFields(list); };
-      // bind inputs
-      row.querySelectorAll('input,select').forEach(inp=>{
-        inp.oninput = () => {
-          const name = inp.getAttribute('name');
-          list[i][name] = (name==='max' && inp.value!=='') ? Number(inp.value) : inp.value;
-          btnHidden.value = JSON.stringify(list);
-        };
-      });
-      tools.querySelector('input[type=checkbox]').onchange = (e)=>{ list[i].required = e.target.checked; btnHidden.value=JSON.stringify(list); };
-    });
-    btnHidden.value = JSON.stringify(list);
-  }
-
-  const btnList = Array.isArray(initialPanel.buttonForm) ? initialPanel.buttonForm.slice(0,5) : [];
-  renderBtnFields(btnList);
-  btnAdd.onclick = () => { if (btnList.length < 5) { btnList.push({ id:'field'+(btnList.length+1), label:'Question '+(btnList.length+1), style:'short', required:false }); renderBtnFields(btnList); } };
-
-  /* --- Options + per-option form builder --- */
-  const optListDiv = document.getElementById('optList');
-  const optAddBtn  = document.getElementById('optAdd');
-  const optsHidden = document.getElementById('optionsJson');
-
-  const opts = Array.isArray(initialPanel.options) ? initialPanel.options.slice(0,6).map(o=>({
-    label:o.label||'Reason', description:o.description||'', emoji:o.emoji||'', form:Array.isArray(o.form)?o.form.slice(0,5):[]
-  })) : [];
-
-  function renderOneOption(o, idx){
-    const wrap = el('div','border border-slate-800 rounded p-3 grid gap-2');
-    wrap.innerHTML = `
-      <div class="grid md:grid-cols-3 gap-2">
-        ${makeText('label', o.label, 'Label')}
-        ${makeText('description', o.description, 'Description (optional)')}
-        ${makeText('emoji', o.emoji, 'Emoji (Unicode or <:name:id>)')}
-      </div>
+  function addKickRow() {
+    const i = kickList.querySelectorAll('.grid.md\\:grid-cols-5').length;
+    const div = document.createElement('div');
+    div.className = 'grid md:grid-cols-5 gap-2 items-center border border-slate-800 rounded p-2';
+    div.innerHTML = `
+      <input name="kick_${i}_login" placeholder="Kick username" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+      <input name="kick_${i}_uid" placeholder="Discord User ID" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
+      <select name="kick_${i}_chan" class="px-3 py-2 rounded bg-slate-800 border border-slate-700">
+        <option value="">— fallback channel (optional) —</option>
+        <% (guildData.text || []).forEach(t => { %>
+          <option value="<%= t.id %>"><%= t.name %></option>
+        <% }) %>
+      </select>
+      <label class="inline-flex items-center gap-2">
+        <input type="checkbox" name="kick_${i}_enabled" checked />
+        <span>Enabled</span>
+      </label>
+      <button type="button" class="kickRemove px-3 py-1 rounded bg-red-600 hover:bg-red-500">Remove</button>
     `;
-    // fields list
-    const fieldsWrap = el('div','grid gap-2');
-    const fieldHdr = el('div','flex items-center justify-between');
-    fieldHdr.innerHTML = `<h4 class="font-medium">Questions for "${o.label}" (max 5)</h4>
-      <button type="button" class="addf px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500">Add field</button>`;
-    fieldsWrap.appendChild(fieldHdr);
+    kickList.appendChild(div);
+    kickCount.value = kickList.querySelectorAll('.grid.md\\:grid-cols-5').length;
+  }
 
-    const listWrap = el('div','grid gap-2');
-    function renderFields(){
-      listWrap.innerHTML = '';
-      o.form.forEach((f,i)=>{
-        const row = el('div','grid md:grid-cols-5 gap-2 items-center');
-        row.innerHTML = `
-          ${makeText('id', f.id, 'id')} 
-          ${makeText('label', f.label, 'label')}
-          ${makeText('placeholder', f.placeholder, 'placeholder')}
-          ${makeSelect('style', f.style||'short')}
-          ${makeText('max', (f.max??''), 'max')}
-        `;
-        const tools = el('div','flex items-center gap-3');
-        tools.innerHTML = `${makeCheck('required', f.required, 'Required')} <button type="button" class="rm px-2 py-1 rounded bg-red-600 hover:bg-red-500">Remove</button>`;
-        const box = el('div','border border-slate-800 rounded p-2 grid gap-2');
-        box.append(row,tools);
-        listWrap.appendChild(box);
+  kickAdd?.addEventListener('click', addKickRow);
 
-        row.querySelectorAll('input,select').forEach(inp=>{
-          inp.oninput = () => {
-            const name = inp.getAttribute('name');
-            o.form[i][name] = (name==='max' && inp.value!=='') ? Number(inp.value) : inp.value;
-            syncOptions();
-          };
-        });
-        tools.querySelector('input[type=checkbox]').onchange = (e)=>{ o.form[i].required = e.target.checked; syncOptions(); };
-        tools.querySelector('.rm').onclick = () => { o.form.splice(i,1); renderFields(); syncOptions(); };
+  kickList?.addEventListener('click', (e) => {
+    const btn = e.target.closest('.kickRemove');
+    if (!btn) return;
+    const box = btn.closest('.grid.md\\:grid-cols-5');
+    box.remove();
+    // re-index
+    const rows = kickList.querySelectorAll('.grid.md\\:grid-cols-5');
+    rows.forEach((row, idx) => {
+      row.querySelectorAll('input,select').forEach(el => {
+        el.name = el.name.replace(/kick_\d+_/g, `kick_${idx}_`);
       });
-    }
-    renderFields();
-    fieldsWrap.appendChild(listWrap);
-
-    fieldHdr.querySelector('.addf').onclick = ()=>{ if (o.form.length<5){ o.form.push({id:'field'+(o.form.length+1), label:'Question '+(o.form.length+1), style:'short', required:false}); renderFields(); syncOptions(); } };
-
-    // remove option
-    const tools = el('div','flex justify-end');
-    const rmBtn = el('button','px-3 py-1 rounded bg-red-600 hover:bg-red-500','Remove option');
-    rmBtn.type = 'button';
-    rmBtn.onclick = ()=>{ opts.splice(idx,1); renderOptions(); syncOptions(); };
-    tools.appendChild(rmBtn);
-
-    // bind top inputs
-    const inputsTop = wrap.querySelectorAll('input');
-    inputsTop.forEach(inp=>{
-      inp.oninput = ()=>{ const name = inp.getAttribute('name'); o[name]=inp.value; fieldHdr.querySelector('h4').innerText = `Questions for "${o.label}" (max 5)`; syncOptions(); };
     });
-
-    wrap.appendChild(fieldsWrap);
-    wrap.appendChild(tools);
-    return wrap;
-  }
-
-  function renderOptions(){
-    optListDiv.innerHTML = '';
-    opts.forEach((o,i)=> optListDiv.appendChild(renderOneOption(o,i)) );
-  }
-  function syncOptions(){ optsHidden.value = JSON.stringify(opts); }
-
-  renderOptions();
-  syncOptions();
-
-  optAddBtn.onclick = ()=>{ if (opts.length<6){ opts.push({label:'Reason '+(opts.length+1), description:'', emoji:'', form:[]}); renderOptions(); syncOptions(); } };
-
-  // Ensure latest on submit
-  document.getElementById('panelForm').addEventListener('submit', ()=>{ 
-    btnHidden.value = JSON.stringify(btnList);
-    optsHidden.value = JSON.stringify(opts);
+    kickCount.value = rows.length;
   });
 </script>
