@@ -1,15 +1,15 @@
 <section class="grid gap-6">
   <h1 class="text-2xl font-semibold mb-2">Dashboard</h1>
 
-  <!-- Top two big sections (as in your sketch) -->
+  <!-- Üstte iki büyük bölüm -->
   <div class="grid md:grid-cols-1 gap-4">
     <a href="#support-ticket" class="block rounded-xl border border-slate-800 bg-slate-900 p-8 hover:border-indigo-500 hover:bg-slate-800 transition">
       <h2 class="text-xl font-semibold mb-2">Support Ticket System</h2>
-      <p class="text-slate-400">Open to edit ticket settings and panels.</p>
+      <p class="text-slate-400">Ticket ayarlarını ve panelleri düzenleyin.</p>
     </a>
     <a href="#kick-alert" class="block rounded-xl border border-slate-800 bg-slate-900 p-8 hover:border-emerald-500 hover:bg-slate-800 transition">
       <h2 class="text-xl font-semibold mb-2">Kick Activity Alert</h2>
-      <p class="text-slate-400">Open to add Kick streamers and configure the alert.</p>
+      <p class="text-slate-400">Kick yayıncıları ekleyin ve DM uyarısını ayarlayın.</p>
     </a>
   </div>
 
@@ -78,13 +78,13 @@
         <label class="grid gap-1">
           <span>Allowed Voice Channel IDs (comma-separated)</span>
           <input name="voice_allowed_ids" value="<%= (cfg.kick?.allowedVoiceIds || []).join(',') %>" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"/>
-          <span class="text-xs text-slate-400">Leave blank = any voice channel is OK.</span>
+          <span class="text-xs text-slate-400">Boş bırakılırsa herhangi bir ses kanalı kabul edilir.</span>
         </label>
 
         <label class="grid gap-1">
           <span>Global DM Message</span>
           <textarea name="kick_message" rows="4" class="px-3 py-2 rounded bg-slate-800 border border-slate-700"><%= cfg.kick?.message || '' %></textarea>
-          <span class="text-xs text-slate-400">Vars: {user} {login} {url} {title} {game}</span>
+          <span class="text-xs text-slate-400">Değişkenler: {user} {login} {url} {title} {game}</span>
         </label>
       </div>
 

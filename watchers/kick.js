@@ -8,6 +8,7 @@ const CFG_PATH = path.join(DATA_DIR, 'config.json');
 
 function readJson(p, f) { try { return JSON.parse(fs.readFileSync(p,'utf8')); } catch { return f; } }
 function writeJson(p, v) { fs.writeFileSync(p, JSON.stringify(v, null, 2)); }
+
 function ensure() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(STREAMERS_PATH)) writeJson(STREAMERS_PATH, []);
