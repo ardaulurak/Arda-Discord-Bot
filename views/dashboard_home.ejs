@@ -28,3 +28,29 @@
     </div>
   </div>
 </div>
+<% include('partials/head') %>
+
+<section class="grid gap-6">
+  <h1 class="text-2xl font-semibold">Dashboard</h1>
+
+  <div class="grid md:grid-cols-2 gap-6">
+    <!-- Support Ticket System card -->
+    <div class="card">
+      <h2 class="text-xl font-semibold mb-2">Support Ticket System</h2>
+      <p class="text-sm text-slate-400 mb-4">Ticket ayarlarını ve panelleri düzenleyin.</p>
+      <div class="flex gap-3">
+        <a class="btn" href="/dashboard/tickets?which=1">Open</a>
+        <a class="text-sm underline hover:text-white/90" href="/dashboard/tickets?which=2">Panel #2</a>
+      </div>
+    </div>
+
+    <!-- Kick Activity Alert card -->
+    <div class="card">
+      <h2 class="text-xl font-semibold mb-2">Kick Activity Alert</h2>
+      <p class="text-sm text-slate-400 mb-4">Kick yayıncılarını ekleyin ve DM uyarısını ayarlayın.</p>
+      <a class="btn" href="/dashboard/kick">Open</a>
+    </div>
+  </div>
+</section>
+
+<% include('partials/footer') %>
