@@ -187,3 +187,165 @@ app.listen(PORT, ()=> console.log(`Web up on :${PORT}`));
 client.login(process.env.DISCORD_TOKEN).then(()=>{
   startKickWatcher(client);
 });
+// --- keep existing imports and client setup at top ---
+
+/* tiny JSON stores */
+const DATA_DIR = path.join(__dirname, 'data');
+const CFG_PATH  = path.join(DATA_DIR, 'config.json');             // tickets (existing)
+const KICK_PATH = path.join(DATA_DIR, 'kick.json');               // kick alert (new)
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive:true });
+if (!fs.existsSync(CFG_PATH))  fs.writeFileSync(CFG_PATH, JSON.stringify({ supportCategoryId:'', allowedRoleIds:[] }, null, 2));
+if (!fs.existsSync(KICK_PATH)) fs.writeFileSync(KICK_PATH, JSON.stringify({
+  allowedVoiceIds: [],             // array of voice channel ids
+  fallbackChannelId: "",           // optional text channel id
+  globalMessage: "",               // DM body template
+  streamers: []                    // [{ discordId, kickUrl }]
+}, null, 2));
+
+const readJson = (p)=> JSON.parse(fs.readFileSync(p,'utf8'));
+const writeJson = (p,obj)=> fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+
+/* Express base (keep your existing) */
+app.set('view engine','ejs');
+app.set('views', path.join(__dirname,'views'));
+app.engine('ejs',(await import('ejs')).default.__express);
+app.use(express.urlencoded({ extended:true }));
+app.use(express.static(path.join(__dirname,'public')));
+
+/* auth guard (keep yours) */
+const requireAuth = (req,res,next)=> req.session?.authed ? next() : res.redirect('/login');
+
+/* helper to map guild structure for selects */
+async function collectGuildData() {
+  const guild = await client.guilds.fetch(process.env.GUILD_ID);
+  const full  = await guild.fetch();
+  const channels = await guild.channels.fetch();
+
+  const categories = [];
+  const textChannels = [];
+  const voiceChannels = [];
+
+  channels.forEach(ch => {
+    if (!ch) return;
+    if (ch.type === 4) categories.push({ id: ch.id, name: ch.name });                 // category
+    if (ch.type === 0) textChannels.push({ id: ch.id, name: `#${ch.name}` });         // text
+    if (ch.type === 2) voiceChannels.push({ id: ch.id, name: ch.name });              // voice
+  });
+
+  const roles = (await guild.roles.fetch()).map(r => ({ id: r.id, name: r.name, color: r.color }));
+
+  return { categories, textChannels, voiceChannels, roles };
+}
+
+/* ------------ Routes ------------- */
+
+// Landing with two cards
+app.get('/dashboard', requireAuth, async (_req,res) => {
+  res.render('dashboard_home', {
+    layout:'layout',
+    title:'Dashboard',
+    loggedIn:true,
+    ready: client?.isReady?.() || false,
+    botTag: client?.user?.tag || null,
+    guildId: process.env.GUILD_ID || 'n/a'
+  });
+});
+
+// Ticket editor (panel=1 or 2 via ?which=1)
+app.get('/dashboard/tickets', requireAuth, async (req,res) => {
+  const which = String(req.query.which || '1');
+  const cfg   = readJson(CFG_PATH);
+  const panelPath = path.join(DATA_DIR, `panel${which}.json`);
+  const panel = fs.existsSync(panelPath) ? readJson(panelPath) : { mode:'button', title:'Organizer Support', body:'Have an inquiry? Use the control below to open a ticket. A private channel will be created and our team will assist you.' };
+
+  const guildData = await collectGuildData();
+
+  res.render('dashboard_tickets', {
+    layout:'layout',
+    title:`Panel ${which}`,
+    loggedIn:true,
+    which, cfg, panel, guildData
+  });
+});
+
+// Save ticket config (category + roles)
+app.post('/dashboard/save-config', requireAuth, (req,res) => {
+  const cfg = readJson(CFG_PATH);
+  const allowed = Array.isArray(req.body.allowedRoleIds) ? req.body.allowedRoleIds
+                : req.body.allowedRoleIds ? [req.body.allowedRoleIds] : [];
+  cfg.supportCategoryId = (req.body.supportCategoryId || '').trim();
+  cfg.allowedRoleIds = allowed.map(String);
+  writeJson(CFG_PATH, cfg);
+  res.redirect('/dashboard/tickets?which='+String(req.body.which||'1'));
+});
+
+// Save ticket panel
+app.post('/dashboard/save-panel', requireAuth, (req,res) => {
+  const which = String(req.body.which || '1');
+  const target = path.join(DATA_DIR, `panel${which}.json`);
+  const panel = {
+    mode: (req.body.mode === 'dropdown') ? 'dropdown' : 'button',
+    title: (req.body.title||'').trim(),
+    body: (req.body.body||'').trim(),
+    buttonLabel: (req.body.buttonLabel||'Create ticket').trim(),
+    branding: {
+      label: (req.body.brand_label||'').trim(),
+      url: (req.body.brand_url||'').trim()
+    },
+    buttonForm: [],
+    options: []
+  };
+
+  try {
+    if (req.body.buttonForm && req.body.buttonForm.trim()!=='') {
+      const b = JSON.parse(req.body.buttonForm);
+      panel.buttonForm = Array.isArray(b) ? b.slice(0,5) : [];
+    }
+  } catch {}
+  try {
+    if (req.body.options && req.body.options.trim()!=='') {
+      const o = JSON.parse(req.body.options);
+      panel.options = Array.isArray(o) ? o.slice(0,6) : [];
+    }
+  } catch {}
+
+  writeJson(target, panel);
+  res.redirect('/dashboard/tickets?which='+which);
+});
+
+// Kick editor
+app.get('/dashboard/kick', requireAuth, async (_req,res) => {
+  const kick = readJson(KICK_PATH);
+  const guildData = await collectGuildData();
+  res.render('dashboard_kick', {
+    layout:'layout',
+    title:'Kick Activity Alert',
+    loggedIn:true,
+    kick, guildData
+  });
+});
+
+// Save kick settings
+app.post('/dashboard/save-kick', requireAuth, (req,res) => {
+  const kick = readJson(KICK_PATH);
+
+  // multi-select allowedVoiceIds
+  let allowed = req.body.allowedVoiceIds || [];
+  if (!Array.isArray(allowed)) allowed = [allowed];
+  kick.allowedVoiceIds = allowed.map(String).filter(Boolean);
+
+  kick.fallbackChannelId = (req.body.fallbackChannelId || '').trim();
+  kick.globalMessage    = (req.body.globalMessage || '').trim();
+
+  const count = parseInt(req.body.count||'0',10);
+  const list = [];
+  for (let i=0;i<count;i++){
+    const discordId = (req.body[`streamer_${i}_discordId`]||'').trim();
+    const kickUrl   = (req.body[`streamer_${i}_kickUrl`]||'').trim();
+    if (discordId && kickUrl) list.push({ discordId, kickUrl });
+  }
+  kick.streamers = list;
+
+  writeJson(KICK_PATH, kick);
+  res.redirect('/dashboard/kick');
+});

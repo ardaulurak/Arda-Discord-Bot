@@ -1,0 +1,56 @@
+<a class="btn secondary" href="/dashboard">← Back to dashboard</a>
+
+<section class="grid" style="margin-top:12px">
+  <div class="card">
+    <h2>Kick Activity Alert</h2>
+
+    <form method="POST" action="/dashboard/save-kick" class="grid">
+      <label>
+        <span>Allowed Voice Channels (multi-select)</span>
+        <select class="input" name="allowedVoiceIds" multiple size="8">
+          <% const chosen = new Set((kick.allowedVoiceIds||[]).map(String)); %>
+          <% (guildData.voiceChannels||[]).forEach(v=>{ %>
+            <option value="<%= v.id %>" <%= chosen.has(String(v.id))?'selected':'' %>><%= v.name %></option>
+          <% }) %>
+        </select>
+        <div class="kicker">Yayıncı bu listedeki ses kanallarından birinde değilse uyarı gönderilir.</div>
+      </label>
+
+      <label>
+        <span>Fallback Text Channel (optional)</span>
+        <select class="input" name="fallbackChannelId">
+          <option value="">— none —</option>
+          <% (guildData.textChannels||[]).forEach(t=>{ %>
+            <option value="<%= t.id %>" <%= String(kick.fallbackChannelId||'')===String(t.id)?'selected':'' %>><%= t.name %></option>
+          <% }) %>
+        </select>
+        <div class="kicker">Kullanıcının DM’leri kapalıysa uyarı bu kanala gönderilir. Boş bırakırsanız gönderilmez.</div>
+      </label>
+
+      <label>
+        <span>Global DM Message</span>
+        <textarea class="input" rows="3" name="globalMessage"><%= kick.globalMessage||'' %></textarea>
+        <div class="kicker">Değişkenler: {user} {login} {url} {title}</div>
+      </label>
+
+      <div>
+        <span class="kicker">Streamers (Kick)</span>
+        <div class="grid">
+          <% (kick.streamers||[]).forEach((s,idx)=>{ %>
+            <div class="grid grid-2">
+              <label><span>Discord User ID</span>
+                <input class="input" name="streamer_<%= idx %>_discordId" value="<%= s.discordId||'' %>">
+              </label>
+              <label><span>Kick Channel URL (ex: https://kick.com/username)</span>
+                <input class="input" name="streamer_<%= idx %>_kickUrl" value="<%= s.kickUrl||'' %>">
+              </label>
+            </div>
+          <% }) %>
+          <input type="hidden" name="count" value="<%= (kick.streamers||[]).length %>">
+        </div>
+      </div>
+
+      <button class="btn success">Save Kick Settings</button>
+    </form>
+  </div>
+</section>

@@ -1,0 +1,81 @@
+<a class="btn secondary" href="/dashboard">← Back to dashboard</a>
+<div class="grid" style="margin-top:12px">
+  <div class="card">
+    <h2>Ticket Settings</h2>
+
+    <form method="POST" action="/dashboard/save-config" class="grid">
+      <input type="hidden" name="which" value="<%= which %>">
+
+      <label>
+        <span>Support Category</span>
+        <select name="supportCategoryId" class="input">
+          <option value="">— Select a category —</option>
+          <% (guildData.categories||[]).forEach(c=>{ %>
+            <option value="<%= c.id %>" <%= String(cfg.supportCategoryId)===String(c.id)?'selected':'' %>><%= c.name %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <div>
+        <span class="kicker">Staff Roles (can claim/close)</span>
+        <div>
+          <% const selected = new Set(cfg.allowedRoleIds||[]); %>
+          <% (guildData.roles||[]).forEach(r=>{ %>
+            <label class="badge"><input type="checkbox" name="allowedRoleIds" value="<%= r.id %>" <%= selected.has(r.id)?'checked':'' %>> <%= r.name %></label>
+          <% }) %>
+        </div>
+      </div>
+
+      <button class="btn success">Save</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Panel <%= which %> — Ticket Panel</h2>
+
+    <form method="POST" action="/dashboard/save-panel" class="grid">
+      <input type="hidden" name="which" value="<%= which %>">
+
+      <div class="grid grid-2">
+        <label><span>Mode</span>
+          <label class="badge"><input type="radio" name="mode" value="button" <%= (panel.mode!=='dropdown')?'checked':'' %> > Create Button</label>
+          <label class="badge"><input type="radio" name="mode" value="dropdown" <%= (panel.mode==='dropdown')?'checked':'' %> > Dropdown Reasons</label>
+        </label>
+      </div>
+
+      <label><span>Title</span>
+        <input class="input" name="title" value="<%= panel.title||'' %>">
+      </label>
+
+      <label><span>Body</span>
+        <textarea class="input" rows="4" name="body"><%= panel.body||'' %></textarea>
+      </label>
+
+      <div class="grid grid-2">
+        <label><span>Create Button Label</span>
+          <input class="input" name="buttonLabel" value="<%= panel.buttonLabel||'Create ticket' %>">
+        </label>
+        <div>
+          <span>Branding (shows as link button)</span>
+          <div class="grid grid-2">
+            <input class="input" name="brand_label" placeholder="Label (optional)" value="<%= panel.branding?.label||'' %>">
+            <input class="input" name="brand_url" placeholder="https://… (optional)" value="<%= panel.branding?.url||'' %>">
+          </div>
+        </div>
+      </div>
+
+      <label><span>Create Button — Questions (JSON, max 5)</span>
+        <textarea class="input" rows="4" name="buttonForm"><%= (panel.buttonForm&&panel.buttonForm.length)?JSON.stringify(panel.buttonForm,null,2):'' %></textarea>
+        <div class="kicker">Leave blank to have no popup.</div>
+      </label>
+
+      <label><span>Dropdown Options (JSON, used only if mode = dropdown)</span>
+        <textarea class="input" rows="6" name="options"><%= (panel.options&&panel.options.length)?JSON.stringify(panel.options,null,2):`[
+  { "label": "General Inquiry", "description": "Choose this for general questions" }
+]` %></textarea>
+      </label>
+
+      <button class="btn success">Save Panel</button>
+    </form>
+  </div>
+</div>
